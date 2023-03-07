@@ -1,14 +1,14 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { randomUUID } from 'crypto';
-import { someRepo } from './InMemorySomeRepository';
-import { SomeService } from './SomeService';
+import { InMemorySomeRepository } from './InMemorySomeRepository';
+import { createSomeRouter } from './SomeRouter';
 import express = require('express');
+import bodyParser = require('body-parser');
 
 type Context = { correlationId: string }
 
+const someRepo = new InMemorySomeRepository()
 export const context = new AsyncLocalStorage<Context>();
-
-const someService = new SomeService(someRepo);
 
 const app = express();
 
@@ -21,11 +21,17 @@ app.use((req, res, next) => {
   });
 })
 
-app.get("/foo", async (req, res) => {
-  const foo = await someService.getFoo()
-
-  res.json(foo);
+app.use(bodyParser.json({ limit: "50mb" }));
+app.use((req, res, next) => {
+  console.log("Received request", {
+    body: req.body,
+    headers: req.headers,
+    ip: req.ip,
+    correlationId: context.getStore()?.correlationId
+  });
+  next();
 })
+app.use(createSomeRouter(someRepo));
 
 app.listen(8080, () => {
   console.log("listening on http://localhost:8080")
